@@ -12,8 +12,8 @@ defined( 'ABSPATH' ) || exit;
  *
  * The browser never talks to Magnus: it talks to this endpoint, and this
  * endpoint adds the key on the server. The route is public, like any chat on
- * a public site, so it carries its own limits: message length, reserved
- * inputs, and a per-visitor rate.
+ * a public site, so it carries its own limits: where the request comes from,
+ * message length, reserved inputs, a per-visitor rate and a site-wide rate.
  */
 final class Iamagnus_Chat_Rest {
 
@@ -70,7 +70,14 @@ final class Iamagnus_Chat_Rest {
 			return self::refuse( 503, 'not_configured', __( 'The chat is not available right now.', 'iamagnus-chat' ) );
 		}
 
-		$message = trim( sanitize_textarea_field( (string) $request->get_param( 'message' ) ) );
+		// WordPress answers CORS for any origin, so without this check another
+		// site could put this chat, and this site's key, behind its own page.
+		$origin = (string) $request->get_header( 'origin' );
+		if ( '' !== $origin && ! self::origin_allowed( $origin ) ) {
+			return self::refuse( 403, 'origin', __( 'The chat is not available here.', 'iamagnus-chat' ) );
+		}
+
+		$message = self::normalize_message( $request->get_param( 'message' ) );
 		if ( '' === $message ) {
 			return self::refuse( 400, 'empty', __( 'Write a message first.', 'iamagnus-chat' ) );
 		}
@@ -121,18 +128,44 @@ final class Iamagnus_Chat_Rest {
 	}
 
 	/**
+	 * The message as it goes to Magnus.
+	 *
+	 * The body is JSON and the text is shown with textContent, never as HTML,
+	 * so nothing here is an HTML sanitizer: "3 < 5 & 6" must reach the agent as
+	 * typed. What goes: invalid UTF-8, control characters other than newline and
+	 * tab, and every kind of Unicode space or invisible character at the ends,
+	 * which Magnus also strips before it looks for its reserved inputs.
+	 *
+	 * @param mixed $raw What the browser sent.
+	 * @return string
+	 */
+	public static function normalize_message( $raw ) {
+		if ( ! is_string( $raw ) ) {
+			return '';
+		}
+		$text = wp_check_invalid_utf8( $raw, true );
+		$text = str_replace( array( "\r\n", "\r" ), "\n", $text );
+		$text = preg_replace( '/[\x00-\x08\x0B-\x1F\x7F]/u', '', $text );
+		if ( null === $text ) {
+			return '';
+		}
+		$text = preg_replace( '/^[\p{Z}\p{C}\s]+|[\p{Z}\p{C}\s]+$/u', '', $text );
+		return null === $text ? '' : $text;
+	}
+
+	/**
 	 * Inputs Magnus treats as commands rather than as a message for the agent.
 	 *
 	 * A message starting with "/" can be an operator or debug command
 	 * (/bot, /auto, /behavior), "### Task:" skips the agent and spends the
 	 * key on a plain model call, and a lone "reset" ends a human takeover.
-	 * None of that is for an anonymous visitor.
+	 * None of that is for an anonymous visitor. Expects a normalized message.
 	 *
-	 * @param string $message The visitor's message.
+	 * @param string $message The visitor's message, after normalize_message().
 	 * @return bool
 	 */
 	public static function is_reserved( $message ) {
-		$m = ltrim( (string) $message );
+		$m = (string) $message;
 		if ( '' === $m ) {
 			return false;
 		}
@@ -142,7 +175,42 @@ final class Iamagnus_Chat_Rest {
 		if ( 0 === stripos( $m, '### task:' ) ) {
 			return true;
 		}
-		return 'reset' === strtolower( trim( $m ) );
+		return 'reset' === strtolower( $m );
+	}
+
+	/**
+	 * Whether a browser on this origin may use the chat: this site's own
+	 * address, or one added with the iamagnus_chat_allowed_origins filter.
+	 *
+	 * @param string $origin The Origin header.
+	 * @return bool
+	 */
+	public static function origin_allowed( $origin ) {
+		$allowed = array( self::origin_of( home_url() ), self::origin_of( site_url() ) );
+		/**
+		 * Origins (scheme://host[:port]) whose pages may use the chat.
+		 *
+		 * @param string[] $allowed Default: the site's home and WordPress addresses.
+		 */
+		$allowed = array_map( array( __CLASS__, 'origin_of' ), (array) apply_filters( 'iamagnus_chat_allowed_origins', $allowed ) );
+		return in_array( self::origin_of( $origin ), $allowed, true );
+	}
+
+	/**
+	 * scheme://host[:port], lowercase, without the default port.
+	 *
+	 * @param string $url A URL or an origin.
+	 * @return string
+	 */
+	public static function origin_of( $url ) {
+		$parts = wp_parse_url( (string) $url );
+		if ( empty( $parts['scheme'] ) || empty( $parts['host'] ) ) {
+			return '';
+		}
+		$scheme = strtolower( $parts['scheme'] );
+		$port   = isset( $parts['port'] ) ? (int) $parts['port'] : 0;
+		$plain  = ( 'https' === $scheme && 443 === $port ) || ( 'http' === $scheme && 80 === $port );
+		return $scheme . '://' . strtolower( $parts['host'] ) . ( $port && ! $plain ? ':' . $port : '' );
 	}
 
 	/**
@@ -168,51 +236,105 @@ final class Iamagnus_Chat_Rest {
 	}
 
 	/**
-	 * Fixed-window counters per visitor IP, kept in transients.
+	 * Fixed windows per visitor and for the whole site.
 	 *
-	 * Approximate under concurrency (transients are not atomic), which is
-	 * enough to keep one visitor from spending the site's key. Magnus also
-	 * limits the key: 120 messages per hour by default.
+	 * Per visitor, so one person cannot spend the key; for the whole site, so
+	 * many people together cannot either, even after Magnus raises the key's
+	 * own limit (120 messages per hour by default). With a persistent object
+	 * cache the counters are atomic; with transients they are approximate
+	 * under bursts, which is enough for a chat.
 	 *
 	 * @param string $ip The visitor's IP address.
 	 * @return int Seconds to wait, 0 when the message may go through.
 	 */
 	public static function rate_limit( $ip ) {
 		/**
-		 * Messages allowed per window, as seconds => messages.
+		 * Messages allowed per visitor, as seconds => messages.
 		 *
 		 * @param array $limits Default: 8 per minute and 60 per hour.
 		 */
-		$limits = apply_filters(
+		$per_visitor = apply_filters(
 			'iamagnus_chat_rate_limits',
 			array(
 				MINUTE_IN_SECONDS => 8,
 				HOUR_IN_SECONDS   => 60,
 			)
 		);
-		$id      = substr( self::derive( 'ip', $ip ), 0, 24 );
-		$now     = time();
-		$entries = array();
-		foreach ( (array) $limits as $window => $max ) {
+		$wait = self::spend( 'ip|' . self::ip_bucket( $ip ), (array) $per_visitor );
+		if ( $wait > 0 ) {
+			// Refused per visitor: the site-wide budget is not touched, so one
+			// visitor hammering the chat does not use it up for everyone.
+			return $wait;
+		}
+		/**
+		 * Messages allowed for the whole site, as seconds => messages.
+		 *
+		 * @param array $limits Default: 100 per hour, below the key's 120.
+		 */
+		$site = apply_filters( 'iamagnus_chat_site_limits', array( HOUR_IN_SECONDS => 100 ) );
+		return self::spend( 'site', (array) $site );
+	}
+
+	/**
+	 * Counts one message in each window of a bucket.
+	 *
+	 * @param string $name   The bucket: a visitor or the whole site.
+	 * @param array  $limits seconds => messages.
+	 * @return int Seconds until the fullest window reopens, 0 when all have room.
+	 */
+	private static function spend( $name, $limits ) {
+		$now  = time();
+		$wait = 0;
+		foreach ( $limits as $window => $max ) {
 			$window = (int) $window;
-			$key    = 'iamagnus_chat_rl_' . $window . '_' . $id;
-			$entry  = get_transient( $key );
-			if ( ! is_array( $entry ) || ! isset( $entry['n'], $entry['until'] ) || $entry['until'] <= $now ) {
-				$entry = array(
-					'n'     => 0,
-					'until' => $now + $window,
-				);
+			if ( $window < 1 ) {
+				continue;
 			}
-			if ( $entry['n'] >= (int) $max ) {
-				return max( 1, $entry['until'] - $now );
+			$slot = (int) floor( $now / $window );
+			$key  = 'iamagnus_chat_rl_' . substr( md5( $name . '|' . $window . '|' . $slot ), 0, 20 );
+			if ( self::count( $key, $window ) > (int) $max ) {
+				$wait = max( $wait, ( $slot + 1 ) * $window - $now );
 			}
-			$entries[ $key ] = $entry;
 		}
-		foreach ( $entries as $key => $entry ) {
-			++$entry['n'];
-			set_transient( $key, $entry, max( 1, $entry['until'] - $now ) );
+		return $wait > 0 ? max( 1, $wait ) : 0;
+	}
+
+	/**
+	 * Adds one to a window's counter and returns the new value.
+	 *
+	 * @param string $key    Counter key.
+	 * @param int    $window Seconds the counter lives.
+	 * @return int
+	 */
+	private static function count( $key, $window ) {
+		if ( wp_using_ext_object_cache() ) {
+			wp_cache_add( $key, 0, 'iamagnus_chat', $window );
+			$n = wp_cache_incr( $key, 1, 'iamagnus_chat' );
+			if ( false !== $n ) {
+				return (int) $n;
+			}
 		}
-		return 0;
+		$n = (int) get_transient( $key ) + 1;
+		set_transient( $key, $n, $window );
+		return $n;
+	}
+
+	/**
+	 * The address a limit is counted on. An IPv6 visitor usually controls a
+	 * whole /64, so the /64 is the visitor; counting each address would hand
+	 * them billions of fresh buckets.
+	 *
+	 * @param string $ip An IP address.
+	 * @return string
+	 */
+	public static function ip_bucket( $ip ) {
+		if ( filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ) {
+			$packed = inet_pton( $ip );
+			if ( false !== $packed ) {
+				return bin2hex( substr( $packed, 0, 8 ) ) . '::/64';
+			}
+		}
+		return (string) $ip;
 	}
 
 	/**
@@ -221,8 +343,13 @@ final class Iamagnus_Chat_Rest {
 	 *
 	 * @return string
 	 */
-	private static function client_ip() {
+	public static function client_ip() {
 		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		/**
+		 * The visitor's IP address, for the per-visitor limits.
+		 *
+		 * @param string $ip Default: REMOTE_ADDR.
+		 */
 		return (string) apply_filters( 'iamagnus_chat_client_ip', $ip );
 	}
 

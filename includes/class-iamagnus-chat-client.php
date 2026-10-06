@@ -16,7 +16,7 @@ defined( 'ABSPATH' ) || exit;
  *
  * Every method returns an array instead of throwing. A failure carries a
  * `kind` the rest of the plugin decides on:
- * unreachable, auth, rate_limited, request, server, empty or unexpected.
+ * unreachable, not_magnus, auth, rate_limited, request, server, empty or unexpected.
  */
 final class Iamagnus_Chat_Client {
 
@@ -58,16 +58,18 @@ final class Iamagnus_Chat_Client {
 	public function health() {
 		$response = wp_remote_get(
 			$this->base . '/api/health/simple',
-			array(
-				'timeout' => 10,
-				'headers' => array( 'User-Agent' => self::user_agent() ),
-			)
+			$this->args( 10, array( 'User-Agent' => self::user_agent() ) )
 		);
 		if ( is_wp_error( $response ) ) {
 			return self::failure( 'unreachable', 0, null, null, $response->get_error_message() );
 		}
 		$status = (int) wp_remote_retrieve_response_code( $response );
-		return 200 === $status ? array( 'ok' => true ) : self::failure( 'unreachable', $status, null );
+		$body   = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+		// Any web server answers 200 somewhere; Magnus answers {"status": "ok"}.
+		if ( 200 === $status && is_array( $body ) && isset( $body['status'] ) && 'ok' === $body['status'] ) {
+			return array( 'ok' => true );
+		}
+		return self::failure( 'unreachable', $status, null );
 	}
 
 	/**
@@ -76,13 +78,7 @@ final class Iamagnus_Chat_Client {
 	 * @return array {ok: true, agents: string[]} or a failure.
 	 */
 	public function models() {
-		$response = wp_remote_get(
-			$this->base . '/v1/models',
-			array(
-				'timeout' => 15,
-				'headers' => $this->headers(),
-			)
-		);
+		$response = wp_remote_get( $this->base . '/v1/models', $this->args( 15, $this->headers() ) );
 		if ( is_wp_error( $response ) ) {
 			return self::failure( 'unreachable', 0, null, null, $response->get_error_message() );
 		}
@@ -91,12 +87,13 @@ final class Iamagnus_Chat_Client {
 		if ( 200 !== $status ) {
 			return self::error_from_status( $status, $body, $response );
 		}
+		if ( ! is_array( $body ) || ! isset( $body['object'], $body['data'] ) || 'list' !== $body['object'] || ! is_array( $body['data'] ) ) {
+			return self::failure( 'not_magnus', $status, null );
+		}
 		$agents = array();
-		if ( is_array( $body ) && isset( $body['data'] ) && is_array( $body['data'] ) ) {
-			foreach ( $body['data'] as $model ) {
-				if ( is_array( $model ) && isset( $model['id'] ) && is_string( $model['id'] ) ) {
-					$agents[] = $model['id'];
-				}
+		foreach ( $body['data'] as $model ) {
+			if ( is_array( $model ) && isset( $model['id'] ) && is_string( $model['id'] ) ) {
+				$agents[] = $model['id'];
 			}
 		}
 		return array(
@@ -133,15 +130,10 @@ final class Iamagnus_Chat_Client {
 			),
 			'user'     => (string) $user,
 		);
-		$response = wp_remote_post(
-			$this->base . '/v1/chat/completions',
-			array(
-				'timeout'     => self::TURN_TIMEOUT,
-				'headers'     => $headers,
-				'body'        => wp_json_encode( $payload ),
-				'data_format' => 'body',
-			)
-		);
+		$args                = $this->args( self::TURN_TIMEOUT, $headers );
+		$args['body']        = wp_json_encode( $payload );
+		$args['data_format'] = 'body';
+		$response            = wp_remote_post( $this->base . '/v1/chat/completions', $args );
 		return self::parse_chat( $response );
 	}
 
@@ -254,6 +246,8 @@ final class Iamagnus_Chat_Client {
 		switch ( $kind ) {
 			case 'unreachable':
 				return __( 'Magnus could not be reached. Check the address and that this server can make outgoing HTTPS requests.', 'iamagnus-chat' );
+			case 'not_magnus':
+				return __( 'The address answered, but not the way Magnus does. Check the address.', 'iamagnus-chat' );
 			case 'auth':
 				if ( 'organization_deactivated' === $code ) {
 					return __( 'Magnus accepted the key, but its organization is deactivated.', 'iamagnus-chat' );
@@ -277,6 +271,38 @@ final class Iamagnus_Chat_Client {
 					$code
 				);
 		}
+	}
+
+	/**
+	 * Arguments every call shares.
+	 *
+	 * No redirects: the HTTP library re-sends every header, the key included,
+	 * to wherever a redirect points, another host or plain http. And outside
+	 * localhost, no private or internal addresses, so the address setting
+	 * cannot be used to probe the server's own network.
+	 *
+	 * @param int   $timeout Seconds.
+	 * @param array $headers Headers.
+	 * @return array
+	 */
+	private function args( $timeout, $headers ) {
+		return array(
+			'timeout'            => $timeout,
+			'redirection'        => 0,
+			'reject_unsafe_urls' => ! self::is_local( $this->base ),
+			'headers'            => $headers,
+		);
+	}
+
+	/**
+	 * Whether an address is this machine, which a developer may use for a local Magnus.
+	 *
+	 * @param string $url An address.
+	 * @return bool
+	 */
+	public static function is_local( $url ) {
+		$host = wp_parse_url( (string) $url, PHP_URL_HOST );
+		return in_array( strtolower( (string) $host ), array( 'localhost', '127.0.0.1' ), true );
 	}
 
 	/**

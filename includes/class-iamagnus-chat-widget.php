@@ -67,6 +67,7 @@ final class Iamagnus_Chat_Widget {
 				'typing'          => __( 'Writing…', 'iamagnus-chat' ),
 				'error'           => __( 'I can’t answer right now. Please try again in a few minutes.', 'iamagnus-chat' ),
 				'offline'         => __( 'No connection. Check your internet and try again.', 'iamagnus-chat' ),
+				'retry'           => __( 'Retry', 'iamagnus-chat' ),
 				/* translators: %d: maximum number of characters */
 				'tooLong'         => __( 'Messages can be up to %d characters long.', 'iamagnus-chat' ),
 				'you'             => __( 'You', 'iamagnus-chat' ),

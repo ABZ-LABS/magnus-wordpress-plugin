@@ -165,6 +165,9 @@
 		this.log = Array.isArray(log) ? log : [];
 		this.busy = false;
 		this.typing = null;
+		// Bumped by "New conversation", so a reply that arrives later is dropped.
+		this.generation = 0;
+		this.pending = null;
 		this.build();
 		this.renderLog();
 		if (mode === 'floating') {
@@ -297,7 +300,7 @@
 		this.messages.scrollTop = this.messages.scrollHeight;
 	};
 
-	Chat.prototype.bubble = function (role, text) {
+	Chat.prototype.bubble = function (role, text, retry) {
 		var node = el('div', 'iamagnus-chat__msg iamagnus-chat__msg--' + role);
 		if (role !== 'error') {
 			var who = el('span', 'iamagnus-chat__sr');
@@ -318,6 +321,18 @@
 		} else {
 			node.appendChild(win.document.createTextNode(text));
 		}
+		if (retry) {
+			var again = el('button', 'iamagnus-chat__retry', { type: 'button' });
+			again.textContent = this.i18n.retry || 'Retry';
+			again.addEventListener('click', function () {
+				if (node.parentNode) {
+					node.parentNode.removeChild(node);
+				}
+				retry();
+			});
+			node.appendChild(win.document.createTextNode(' '));
+			node.appendChild(again);
+		}
 		this.messages.appendChild(node);
 		this.scroll();
 		return node;
@@ -337,8 +352,8 @@
 	};
 
 	// Errors are shown but not kept: reloading the page should not replay them.
-	Chat.prototype.add = function (role, text) {
-		this.bubble(role, text);
+	Chat.prototype.add = function (role, text, retry) {
+		this.bubble(role, text, retry);
 		if (role === 'user' || role === 'bot') {
 			this.log.push({ role: role, text: text });
 			if (this.log.length > MAX_LOG) {
@@ -348,20 +363,32 @@
 		}
 	};
 
+	// aria-disabled rather than disabled: disabling the focused button would
+	// drop keyboard and screen-reader focus to the page. send() ignores clicks
+	// while busy.
 	Chat.prototype.setBusy = function (busy) {
 		this.busy = busy;
-		this.sendButton.disabled = busy;
+		this.sendButton.setAttribute('aria-disabled', busy ? 'true' : 'false');
 		if (busy && !this.typing) {
 			this.typing = this.bubble('bot', this.i18n.typing || '…');
 			this.typing.classList.add('iamagnus-chat__typing');
 		} else if (!busy && this.typing) {
-			this.typing.parentNode.removeChild(this.typing);
+			if (this.typing.parentNode) {
+				this.typing.parentNode.removeChild(this.typing);
+			}
 			this.typing = null;
 		}
 	};
 
-	// A new visitor id is a new thread in Magnus: the agent starts over.
+	// A new visitor id is a new thread in Magnus: the agent starts over. A
+	// reply still on its way belongs to the old thread and is dropped.
 	Chat.prototype.restart = function () {
+		this.generation += 1;
+		if (this.pending) {
+			this.pending.abort();
+			this.pending = null;
+		}
+		this.setBusy(false);
 		this.visitor = uuid4();
 		this.saveVisitor();
 		this.log = [];
@@ -386,45 +413,69 @@
 		this.input.value = '';
 		this.resize();
 		this.add('user', text);
-		this.setBusy(true);
+		this.deliver(text, uuid4());
+	};
 
+	// One attempt at a turn. A retry passes the same turn id, so if the first
+	// attempt did reach Magnus, Magnus replays its answer instead of running
+	// the turn (and its tools) a second time.
+	Chat.prototype.deliver = function (text, turn) {
 		var self = this;
+		var generation = this.generation;
+		var visitor = this.visitor;
 		var controller = typeof AbortController === 'function' ? new AbortController() : null;
+		var timedOut = false;
 		var timer = controller ? setTimeout(function () {
+			timedOut = true;
 			controller.abort();
 		}, TIMEOUT_MS) : null;
+		var retry = function () {
+			self.deliver(text, turn);
+		};
+		this.pending = controller;
+		this.setBusy(true);
 
 		win.fetch(this.config.endpoint, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-			// The turn id lets the server replay a turn instead of running it twice.
-			body: JSON.stringify({ message: text, visitor: this.visitor, turn: uuid4() }),
+			body: JSON.stringify({ message: text, visitor: visitor, turn: turn }),
 			credentials: 'omit',
 			signal: controller ? controller.signal : undefined
 		}).then(function (response) {
 			return response.json().catch(function () {
 				return {};
 			}).then(function (data) {
-				return { ok: response.ok, data: data || {} };
+				return { ok: response.ok, status: response.status, data: data || {} };
 			});
 		}).then(function (result) {
+			if (generation !== self.generation) {
+				return;
+			}
 			var data = result.data;
-			if (isUuid(data.visitor) && data.visitor !== self.visitor) {
+			if (isUuid(data.visitor) && data.visitor !== self.visitor && visitor === self.visitor) {
 				self.visitor = data.visitor;
 				self.saveVisitor();
 			}
 			if (result.ok && typeof data.reply === 'string' && data.reply) {
 				self.add('bot', data.reply);
-			} else {
-				self.add('error', (typeof data.message === 'string' && data.message) || self.i18n.error);
+				return;
 			}
+			var retryable = result.status === 429 || (result.status >= 500 && data.code !== 'not_configured');
+			self.add('error', (typeof data.message === 'string' && data.message) || self.i18n.error, retryable ? retry : null);
 		}).catch(function (error) {
-			self.add('error', error && error.name === 'AbortError' ? self.i18n.error : self.i18n.offline);
+			if (generation !== self.generation) {
+				return;
+			}
+			var aborted = error && error.name === 'AbortError';
+			self.add('error', aborted && timedOut ? self.i18n.error : self.i18n.offline, retry);
 		}).then(function () {
 			if (timer) {
 				clearTimeout(timer);
 			}
-			self.setBusy(false);
+			if (generation === self.generation) {
+				self.pending = null;
+				self.setBusy(false);
+			}
 		});
 	};
 

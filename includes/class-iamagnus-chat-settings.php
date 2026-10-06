@@ -135,10 +135,11 @@ final class Iamagnus_Chat_Settings {
 		$input   = is_array( $input ) ? $input : array();
 
 		// The key: an empty field keeps the saved one, the checkbox deletes it.
+		$new_key = isset( $input['api_key'] ) ? sanitize_text_field( trim( (string) $input['api_key'] ) ) : '';
 		if ( ! empty( $input['clear_key'] ) ) {
 			$out['api_key'] = '';
-		} elseif ( isset( $input['api_key'] ) && '' !== trim( (string) $input['api_key'] ) ) {
-			$out['api_key'] = sanitize_text_field( trim( (string) $input['api_key'] ) );
+		} elseif ( '' !== $new_key ) {
+			$out['api_key'] = $new_key;
 		}
 
 		$base  = isset( $input['base_url'] ) ? (string) $input['base_url'] : '';
@@ -150,6 +151,19 @@ final class Iamagnus_Chat_Settings {
 				__( 'The Magnus address must start with https:// (http:// only for localhost). The previous address was kept.', 'iamagnus-chat' )
 			);
 		} else {
+			// A saved key only goes where it was saved for. Otherwise anyone
+			// who may change this page could point it at their own server and
+			// press "Test the connection" to receive a key they cannot read.
+			if ( '' === $new_key && '' !== $out['api_key']
+				&& Iamagnus_Chat_Rest::origin_of( $valid ) !== Iamagnus_Chat_Rest::origin_of( $out['base_url'] ) ) {
+				$out['api_key'] = '';
+				add_settings_error(
+					self::OPTION,
+					'key_cleared',
+					__( 'The saved key was deleted because the Magnus address changed. Paste the key again for the new address.', 'iamagnus-chat' ),
+					'warning'
+				);
+			}
 			$out['base_url'] = $valid;
 		}
 
@@ -408,6 +422,22 @@ final class Iamagnus_Chat_Settings {
 		if ( ! $has_key ) {
 			echo '<div class="notice notice-info"><p>' . esc_html__( 'Paste the API key to turn the chat on. Until then nothing is shown to visitors.', 'iamagnus-chat' ) . '</p></div>';
 			return;
+		}
+
+		// Behind a proxy or a CDN, REMOTE_ADDR is the proxy: every visitor would
+		// share one address and one set of limits.
+		$ip = Iamagnus_Chat_Rest::client_ip();
+		if ( '' !== $ip && ! filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {
+			printf(
+				'<div class="notice notice-info"><p>%s</p></div>',
+				esc_html(
+					sprintf(
+						/* translators: %s: an IP address */
+						__( 'This site sees your request as coming from %s, a private address: it is probably behind a proxy or a CDN. Then every visitor shares one address and one set of chat limits. Use the iamagnus_chat_client_ip filter to read the visitor’s real address.', 'iamagnus-chat' ),
+						$ip
+					)
+				)
+			);
 		}
 
 		$last = get_option( self::LAST_ERROR );

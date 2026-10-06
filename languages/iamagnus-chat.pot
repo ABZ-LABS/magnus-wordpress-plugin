@@ -7,7 +7,7 @@ msgstr ""
 "X-Domain: iamagnus-chat\n"
 
 #. Plugin plugin name.
-#: iamagnus-chat.php includes/class-iamagnus-chat-settings.php:101 includes/class-iamagnus-chat-settings.php:102 includes/class-iamagnus-chat-settings.php:230 includes/class-iamagnus-chat-settings.php:303
+#: iamagnus-chat.php includes/class-iamagnus-chat-settings.php:101 includes/class-iamagnus-chat-settings.php:102 includes/class-iamagnus-chat-settings.php:244 includes/class-iamagnus-chat-settings.php:317
 msgid "Magnus Chat"
 msgstr ""
 
@@ -21,45 +21,49 @@ msgstr ""
 msgid "Magnus"
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:238
+#: includes/class-iamagnus-chat-client.php:230
 msgid "There are many questions right now. Please try again in a minute."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:240 includes/class-iamagnus-chat-widget.php:68
+#: includes/class-iamagnus-chat-client.php:232 includes/class-iamagnus-chat-widget.php:68
 msgid "I can’t answer right now. Please try again in a few minutes."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:256
+#: includes/class-iamagnus-chat-client.php:248
 msgid "Magnus could not be reached. Check the address and that this server can make outgoing HTTPS requests."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:259
+#: includes/class-iamagnus-chat-client.php:250
+msgid "The address answered, but not the way Magnus does. Check the address."
+msgstr ""
+
+#: includes/class-iamagnus-chat-client.php:253
 msgid "Magnus accepted the key, but its organization is deactivated."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:262
+#: includes/class-iamagnus-chat-client.php:256
 msgid "The key does not belong to any organization. Create a System API key in the Magnus dashboard."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:264
+#: includes/class-iamagnus-chat-client.php:258
 msgid "Magnus rejected the API key. Create a new one in the Magnus dashboard and paste it here."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:266
+#: includes/class-iamagnus-chat-client.php:260
 msgid "Magnus is limiting this key: too many messages in the last hour. Ask Magnus for a higher limit if your site needs it."
 msgstr ""
 
 #. translators:%d: HTTP status code
-#: includes/class-iamagnus-chat-client.php:269
+#: includes/class-iamagnus-chat-client.php:263
 msgid "Magnus failed (HTTP %d). It usually passes; if it does not, contact Magnus."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:271
+#: includes/class-iamagnus-chat-client.php:265
 msgid "Magnus answered with an empty message."
 msgstr ""
 
 #. translators:1: HTTP status code, 2: Magnus error code
-#: includes/class-iamagnus-chat-client.php:275
+#: includes/class-iamagnus-chat-client.php:269
 msgid "Magnus refused the request (HTTP %1$d %2$s)."
 msgstr ""
 
@@ -67,16 +71,20 @@ msgstr ""
 msgid "The chat is not available right now."
 msgstr ""
 
-#: includes/class-iamagnus-chat-rest.php:75
+#: includes/class-iamagnus-chat-rest.php:77
+msgid "The chat is not available here."
+msgstr ""
+
+#: includes/class-iamagnus-chat-rest.php:82
 msgid "Write a message first."
 msgstr ""
 
 #. translators:%d: maximum number of characters
-#: includes/class-iamagnus-chat-rest.php:83 includes/class-iamagnus-chat-widget.php:71
+#: includes/class-iamagnus-chat-rest.php:90 includes/class-iamagnus-chat-widget.php:72
 msgid "Messages can be up to %d characters long."
 msgstr ""
 
-#: includes/class-iamagnus-chat-rest.php:87
+#: includes/class-iamagnus-chat-rest.php:94
 msgid "That message can’t be sent as it is. Please write it inside a sentence."
 msgstr ""
 
@@ -92,139 +100,148 @@ msgstr ""
 msgid "Type your message…"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:150
+#: includes/class-iamagnus-chat-settings.php:151
 msgid "The Magnus address must start with https:// (http:// only for localhost). The previous address was kept."
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:218
+#: includes/class-iamagnus-chat-settings.php:163
+msgid "The saved key was deleted because the Magnus address changed. Paste the key again for the new address."
+msgstr ""
+
+#: includes/class-iamagnus-chat-settings.php:232
 msgid "Settings"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:229
+#: includes/class-iamagnus-chat-settings.php:243
 msgid "When you use the chat on this site, what you write is sent to Magnus, the service that runs our virtual assistant, so that it can answer. Magnus keeps the conversation in order to continue it. Your name, email address and IP address are not sent with the messages: each browser is identified by a random code stored in it. Please do not write sensitive personal data in the chat."
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:238
+#: includes/class-iamagnus-chat-settings.php:252
 msgid "You are not allowed to do this."
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:256
+#: includes/class-iamagnus-chat-settings.php:270
 msgid "There is no API key yet. Paste it above and save."
 msgstr ""
 
 #. translators:%s: the Magnus address, such as https://app.iamagnus.com
-#: includes/class-iamagnus-chat-settings.php:265
+#: includes/class-iamagnus-chat-settings.php:279
 msgid "Magnus does not answer at %s. Check the address."
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:279
+#: includes/class-iamagnus-chat-settings.php:293
 msgid "The key works, but its organization has no agent to answer."
 msgstr ""
 
 #. translators:%s: the agent (or agents) the key answers as
-#: includes/class-iamagnus-chat-settings.php:285
+#: includes/class-iamagnus-chat-settings.php:299
 msgid "Connected. This key answers as: %s."
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:309
+#: includes/class-iamagnus-chat-settings.php:323
 msgid "Connection"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:312
+#: includes/class-iamagnus-chat-settings.php:326
 msgid "API key"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:315
+#: includes/class-iamagnus-chat-settings.php:329
 msgid "Saved. Leave empty to keep it."
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:316
+#: includes/class-iamagnus-chat-settings.php:330
 msgid "Create it in the Magnus dashboard, under API keys, for the agent that should answer on this site. It stays on this server: visitors never see it."
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:318
+#: includes/class-iamagnus-chat-settings.php:332
 msgid "Delete the saved key"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:323
+#: includes/class-iamagnus-chat-settings.php:337
 msgid "Magnus address"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:326
+#: includes/class-iamagnus-chat-settings.php:340
 msgid "Leave https://app.iamagnus.com unless Magnus gave you another address."
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:331
+#: includes/class-iamagnus-chat-settings.php:345
 msgid "Chat window"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:334
+#: includes/class-iamagnus-chat-settings.php:348
 msgid "Title"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:338
+#: includes/class-iamagnus-chat-settings.php:352
 msgid "Welcome message"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:341
+#: includes/class-iamagnus-chat-settings.php:355
 msgid "Shown before the visitor writes. Empty fields use the text in gray, in the language of the site."
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:345
+#: includes/class-iamagnus-chat-settings.php:359
 msgid "Text in the message box"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:349
+#: includes/class-iamagnus-chat-settings.php:363
 msgid "Chat button"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:351
+#: includes/class-iamagnus-chat-settings.php:365
 msgid "Show a chat button in a corner of every page"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:353
+#: includes/class-iamagnus-chat-settings.php:367
 msgid "Corner"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:355
+#: includes/class-iamagnus-chat-settings.php:369
 msgid "Bottom right"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:356
+#: includes/class-iamagnus-chat-settings.php:370
 msgid "Bottom left"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:362
+#: includes/class-iamagnus-chat-settings.php:376
 msgid "Color"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:369
+#: includes/class-iamagnus-chat-settings.php:383
 msgid "Check the connection"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:370
+#: includes/class-iamagnus-chat-settings.php:384
 msgid "Asks Magnus whether the address answers and whether the saved key is accepted. It does not send any message to the agent."
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:374
+#: includes/class-iamagnus-chat-settings.php:388
 msgid "Test the connection"
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:377
+#: includes/class-iamagnus-chat-settings.php:391
 msgid "The chat inside a page"
 msgstr ""
 
 #. translators:%s: the shortcode
-#: includes/class-iamagnus-chat-settings.php:382
+#: includes/class-iamagnus-chat-settings.php:396
 msgid "Add %s to a page or post to show the chat inside it, instead of in a corner. On that page the corner button is not shown."
 msgstr ""
 
-#: includes/class-iamagnus-chat-settings.php:409
+#: includes/class-iamagnus-chat-settings.php:423
 msgid "Paste the API key to turn the chat on. Until then nothing is shown to visitors."
 msgstr ""
 
+#. translators:%s: an IP address
+#: includes/class-iamagnus-chat-settings.php:436
+msgid "This site sees your request as coming from %s, a private address: it is probably behind a proxy or a CDN. Then every visitor shares one address and one set of chat limits. Use the iamagnus_chat_client_ip filter to read the visitor’s real address."
+msgstr ""
+
 #. translators:1: date and time, 2: what failed
-#: includes/class-iamagnus-chat-settings.php:420
+#: includes/class-iamagnus-chat-settings.php:450
 msgid "The last time a visitor wrote (%1$s), the chat could not answer: %2$s"
 msgstr ""
 
@@ -252,14 +269,18 @@ msgstr ""
 msgid "No connection. Check your internet and try again."
 msgstr ""
 
-#: includes/class-iamagnus-chat-widget.php:72
-msgid "You"
+#: includes/class-iamagnus-chat-widget.php:70
+msgid "Retry"
 msgstr ""
 
 #: includes/class-iamagnus-chat-widget.php:73
+msgid "You"
+msgstr ""
+
+#: includes/class-iamagnus-chat-widget.php:74
 msgid "Assistant"
 msgstr ""
 
-#: includes/class-iamagnus-chat-widget.php:105
+#: includes/class-iamagnus-chat-widget.php:106
 msgid "Magnus Chat: paste the API key in Settings → Magnus Chat to show the chat here. Visitors see nothing until then."
 msgstr ""

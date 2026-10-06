@@ -69,7 +69,7 @@ const CONFIG = {
 	i18n: {
 		open: 'Open the chat', close: 'Close the chat', send: 'Send', newConversation: 'New conversation',
 		typing: 'Writing…', error: 'Generic error', offline: 'Offline', tooLong: 'Up to %d characters.',
-		you: 'You', assistant: 'Assistant'
+		you: 'You', assistant: 'Assistant', retry: 'Retry'
 	}
 };
 
@@ -116,11 +116,17 @@ async function type(doc, text) {
 	}
 }
 
+// What a sighted visitor reads in each bubble: without the screen-reader label
+// ("You: ") and without the label of a Retry button.
 function bubbles(doc) {
-	return [...doc.querySelectorAll('.iamagnus-chat__msg')].map((node) => ({
-		role: node.className.replace(/.*iamagnus-chat__msg--(\w+).*/, '$1'),
-		text: node.textContent.replace(/^(You|Assistant): /, '')
-	}));
+	return [...doc.querySelectorAll('.iamagnus-chat__msg')].map((node) => {
+		const copy = node.cloneNode(true);
+		copy.querySelectorAll('.iamagnus-chat__sr, .iamagnus-chat__retry').forEach((n) => n.remove());
+		return {
+			role: node.className.replace(/.*iamagnus-chat__msg--(\w+).*/, '$1'),
+			text: copy.textContent.replace(/\s+$/, '')
+		};
+	});
 }
 
 test('the corner button opens and closes the window', async () => {
@@ -256,4 +262,90 @@ test('Enter sends and Shift+Enter does not', async () => {
 test('without a configuration nothing is drawn', async () => {
 	const { document } = await page('<div class="iamagnus-chat-mount" data-mode="floating"></div>', () => ({}), null);
 	assert.equal(document.querySelector('.iamagnus-chat'), null);
+});
+
+test('"New conversation" while a reply is on its way drops that reply', async () => {
+	let release;
+	const late = new Promise((resolve) => {
+		release = resolve;
+	});
+	const { document, window, requests } = await page('<div class="iamagnus-chat-mount" data-mode="inline"></div>', (body, n) =>
+		n === 1 ? late : { status: 200, json: { reply: 'fresh' } }
+	);
+	// The fake fetch resolves with whatever reply() returns; a pending promise keeps it waiting.
+	window.fetch = ((original) => (url, init) => {
+		const body = JSON.parse(init.body);
+		requests.push({ url, init, body });
+		if (requests.length === 1) {
+			return late.then((answer) => ({ ok: true, status: 200, json: () => Promise.resolve(answer) }));
+		}
+		return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ reply: 'fresh' }) });
+	})(window.fetch);
+	await type(document, 'one');
+	const oldVisitor = requests[0].body.visitor;
+	document.querySelector('.iamagnus-chat__header button[aria-label="New conversation"]').click();
+	release({ reply: 'late answer to the old thread', visitor: oldVisitor });
+	for (let i = 0; i < 5; i++) {
+		await settle();
+	}
+	assert.deepEqual(bubbles(document), [{ role: 'bot', text: 'Hi! How can I help you?' }], 'the late reply is not shown');
+	assert.equal(document.querySelector('.iamagnus-chat__typing'), null, 'no typing indicator left behind');
+	assert.notEqual(window.localStorage.getItem('iamagnusChat:visitor'), oldVisitor, 'the old visitor id is not adopted back');
+	await type(document, 'two');
+	assert.notEqual(requests[1].body.visitor, oldVisitor);
+	assert.deepEqual(bubbles(document).pop(), { role: 'bot', text: 'fresh' });
+});
+
+test('a failed turn can be retried with the same turn id, without a second bubble', async () => {
+	const { document, requests } = await page('<div class="iamagnus-chat-mount" data-mode="inline"></div>', (body, n) =>
+		n === 1 ? new TypeError('Failed to fetch') : { status: 200, json: { reply: 'made it' } }
+	);
+	await type(document, 'Hi');
+	const retry = document.querySelector('.iamagnus-chat__retry');
+	assert.ok(retry, 'the error offers a retry');
+	retry.click();
+	for (let i = 0; i < 5; i++) {
+		await settle();
+	}
+	assert.equal(requests.length, 2);
+	assert.equal(requests[1].body.turn, requests[0].body.turn, 'the same turn id, so Magnus replays instead of running twice');
+	assert.equal(requests[1].body.message, 'Hi');
+	assert.deepEqual(bubbles(document).slice(1), [
+		{ role: 'user', text: 'Hi' },
+		{ role: 'bot', text: 'made it' }
+	]);
+});
+
+test('only failures worth retrying offer a retry', async () => {
+	const busy = await page('<div class="iamagnus-chat-mount" data-mode="inline"></div>', () => ({
+		status: 429,
+		json: { code: 'rate_limited', message: 'Busy.' }
+	}));
+	await type(busy.document, 'Hi');
+	assert.ok(busy.document.querySelector('.iamagnus-chat__retry'), 'a 429 can be retried');
+	const refused = await page('<div class="iamagnus-chat-mount" data-mode="inline"></div>', () => ({
+		status: 400,
+		json: { code: 'reserved', message: 'Not like that.' }
+	}));
+	await type(refused.document, '/bot');
+	assert.equal(refused.document.querySelector('.iamagnus-chat__retry'), null, 'a refusal cannot');
+});
+
+test('while waiting, the send button stays focusable', async () => {
+	let release;
+	const { document, window } = await page('<div class="iamagnus-chat-mount" data-mode="inline"></div>', () => ({}));
+	window.fetch = () => new Promise((resolve) => {
+		release = () => resolve({ ok: true, status: 200, json: () => Promise.resolve({ reply: 'ok' }) });
+	});
+	const send = document.querySelector('.iamagnus-chat__send');
+	send.focus();
+	await type(document, 'Hi');
+	assert.equal(send.getAttribute('aria-disabled'), 'true');
+	assert.equal(send.disabled, false, 'not disabled: that would drop focus to the page');
+	assert.equal(document.activeElement, send);
+	release();
+	for (let i = 0; i < 5; i++) {
+		await settle();
+	}
+	assert.equal(send.getAttribute('aria-disabled'), 'false');
 });

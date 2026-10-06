@@ -16,7 +16,7 @@ Magnus Chat connects your WordPress site to an agent you configured in [Magnus](
 * **The key stays on your server.** The browser talks only to your site, and your site adds the key when it calls Magnus. Visitors never see it.
 * **A button in a corner, or the chat inside a page.** Turn on the corner button for every page, or put `[magnus_chat]` where you want the chat.
 * **Each visitor keeps their conversation.** A random code stored in the browser continues the same conversation for up to 30 idle minutes. "New conversation" starts over.
-* **Limits against abuse.** Messages up to 2,000 characters, 8 per minute and 60 per hour per visitor, and commands meant for operators are refused before they reach Magnus.
+* **Limits against abuse.** Messages up to 2,000 characters; 8 per minute and 60 per hour per visitor, and 100 per hour for the whole site; only pages of your own site may use the chat; commands meant for operators are refused before they reach Magnus.
 * **In your visitors' language.** Comes in English and in Spanish for every Spanish locale; the texts of the window can be changed in the settings.
 
 = What you need =
@@ -60,9 +60,9 @@ Yes. The chat does not depend on per-visitor data in the page, so a cached page 
 
 = Can I change the limits? =
 
-Yes, with filters: `iamagnus_chat_rate_limits` (seconds => messages), `iamagnus_chat_max_message_length` and `iamagnus_chat_client_ip` (behind a proxy or CDN, return the visitor's real IP). `iamagnus_chat_show_floating` decides, page by page, whether the corner button shows.
+Yes, with filters: `iamagnus_chat_rate_limits` (per visitor) and `iamagnus_chat_site_limits` (for the whole site), both as seconds => messages; `iamagnus_chat_max_message_length`; `iamagnus_chat_client_ip` (behind a proxy or CDN, return the visitor's real IP); and `iamagnus_chat_allowed_origins` (other addresses of your own site). `iamagnus_chat_show_floating` decides, page by page, whether the corner button shows. If you raise the site limit, ask Magnus to raise the key's limit too.
 
 == Changelog ==
 
 = 0.1.0 =
-* First version: settings page with a connection test, corner button and `[magnus_chat]` shortcode, server-side proxy to Magnus `/v1`, limits per visitor, English and Spanish.
+* First version: settings page with a connection test, corner button and `[magnus_chat]` shortcode, server-side proxy to Magnus `/v1`, limits per visitor and per site, retry without running a turn twice, English and Spanish.

@@ -265,3 +265,18 @@ msgstr "Asistente"
 #: includes/class-iamagnus-chat-widget.php:105
 msgid "Magnus Chat: paste the API key in Settings → Magnus Chat to show the chat here. Visitors see nothing until then."
 msgstr "Magnus Chat: pega la API key en Ajustes → Magnus Chat para mostrar el chat aquí. Hasta entonces, los visitantes no ven nada."
+
+msgid "The chat is not available here."
+msgstr "El chat no está disponible aquí."
+
+msgid "The address answered, but not the way Magnus does. Check the address."
+msgstr "La dirección respondió, pero no como responde Magnus. Revisa la dirección."
+
+msgid "The saved key was deleted because the Magnus address changed. Paste the key again for the new address."
+msgstr "Se borró la key guardada porque cambió la dirección de Magnus. Vuelve a pegar la key para la dirección nueva."
+
+msgid "This site sees your request as coming from %s, a private address: it is probably behind a proxy or a CDN. Then every visitor shares one address and one set of chat limits. Use the iamagnus_chat_client_ip filter to read the visitor’s real address."
+msgstr "Este sitio ve tu pedido como si viniera de %s, una dirección privada: probablemente está detrás de un proxy o una CDN. En ese caso todos los visitantes comparten una dirección y los mismos límites del chat. Usa el filtro iamagnus_chat_client_ip para leer la dirección real del visitante."
+
+msgid "Retry"
+msgstr "Reintentar"

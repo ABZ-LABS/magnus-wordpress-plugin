@@ -18,10 +18,16 @@ navegador del visitante ──POST /wp-json/iamagnus-chat/v1/message──▶ Wo
   le manda a Magnus un hash con clave de ese id como `user`, que es como Magnus
   hila una conversación (30 minutos de inactividad). «Nueva conversación» empieza
   de cero.
-- **Límites antes de llegar a Magnus.** Hasta 2.000 caracteres, 8 mensajes por
-  minuto y 60 por hora por IP, y se rechazan las entradas reservadas de Magnus
-  (`/bot`, `/behavior`, `### Task:`, un `reset` solo). Cada turno lleva un
-  `Idempotency-Key`, así un turno reintentado se repite en vez de correr dos veces.
+- **Límites antes de llegar a Magnus.** Hasta 2.000 caracteres; 8 mensajes por
+  minuto y 60 por hora por visitante (un visitante IPv6 es su /64), y 100 por hora
+  para todo el sitio, por debajo de los 120 de la key. Sólo las páginas del propio
+  sitio pueden llamar a la ruta. Se rechazan las entradas reservadas de Magnus
+  (`/bot`, `/behavior`, `### Task:`, un `reset` solo) aunque vengan detrás de
+  espacios Unicode. Cada turno lleva un `Idempotency-Key`, y «Reintentar» reenvía
+  el mismo turno, así Magnus lo repite en vez de correrlo dos veces.
+- **La key va sólo adonde se guardó.** No se siguen redirecciones (se llevarían
+  la key), se rechazan direcciones internas, y cambiar la dirección de Magnus
+  borra la key guardada salvo que venga una nueva con el cambio.
 - **Cada falla se le cuenta a quien corresponde.** El visitante lee «No puedo
   responder en este momento»; el dueño ve la causa en Ajustes → Magnus Chat y puede
   probar la conexión ahí.

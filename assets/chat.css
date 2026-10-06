@@ -205,8 +205,10 @@
 	border-top: 1px solid var(--iamagnus-border);
 }
 
+/* 16px: smaller text makes iOS Safari zoom in when the box gets focus. */
 .iamagnus-chat__input {
 	flex: 1;
+	font-size: 16px;
 	min-height: 40px;
 	max-height: 120px;
 	padding: 9px 12px;
@@ -232,9 +234,19 @@
 	cursor: pointer;
 }
 
-.iamagnus-chat__send:disabled {
+.iamagnus-chat__send[aria-disabled="true"] {
 	opacity: 0.5;
 	cursor: default;
+}
+
+.iamagnus-chat__retry {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font-weight: 600;
+	text-decoration: underline;
+	cursor: pointer;
 }
 
 /* Read by screen readers, not shown. */
