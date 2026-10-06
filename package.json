@@ -1,0 +1,12 @@
+{
+  "name": "magnus-wordpress-plugin",
+  "private": true,
+  "description": "Development tooling for the Magnus Chat WordPress plugin. Nothing here ships with the plugin.",
+  "license": "GPL-2.0-or-later",
+  "scripts": {
+    "test": "node --test \"tests/js/*.test.js\""
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}

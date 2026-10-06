@@ -1,0 +1,288 @@
+/*!
+ * Magnus Chat: the chat window.
+ * Copyright 2026 Gonzalo Garategui. GPL-2.0-or-later.
+ *
+ * Everything is scoped under .iamagnus-chat and resets what themes commonly
+ * style globally (buttons, textareas, headings), so the window looks the same
+ * on any theme.
+ */
+
+.iamagnus-chat {
+	--iamagnus-accent: #4f46e5;
+	--iamagnus-bg: #ffffff;
+	--iamagnus-fg: #1f2937;
+	--iamagnus-muted: #6b7280;
+	--iamagnus-bubble: #f3f4f6;
+	--iamagnus-border: #e5e7eb;
+	--iamagnus-error-bg: #fef2f2;
+	--iamagnus-error-fg: #b91c1c;
+	box-sizing: border-box;
+	color: var(--iamagnus-fg);
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	font-size: 15px;
+	line-height: 1.45;
+	text-align: left;
+}
+
+.iamagnus-chat *,
+.iamagnus-chat *::before,
+.iamagnus-chat *::after {
+	box-sizing: inherit;
+}
+
+.iamagnus-chat button,
+.iamagnus-chat textarea {
+	font: inherit;
+	letter-spacing: normal;
+	text-transform: none;
+	margin: 0;
+	box-shadow: none;
+}
+
+/* The corner button. */
+.iamagnus-chat--floating {
+	position: fixed;
+	right: 20px;
+	bottom: 20px;
+	z-index: 99999;
+}
+
+.iamagnus-chat--floating.iamagnus-chat--left {
+	right: auto;
+	left: 20px;
+}
+
+.iamagnus-chat__launcher {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 56px;
+	height: 56px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: var(--iamagnus-accent);
+	color: #ffffff;
+	cursor: pointer;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.iamagnus-chat button:focus-visible,
+.iamagnus-chat textarea:focus-visible,
+.iamagnus-chat a:focus-visible {
+	outline: 3px solid var(--iamagnus-accent);
+	outline-offset: 2px;
+}
+
+.iamagnus-chat__header .iamagnus-chat__icon:focus-visible {
+	outline-color: #ffffff;
+}
+
+/* The window. */
+.iamagnus-chat__panel {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid var(--iamagnus-border);
+	border-radius: 14px;
+	background: var(--iamagnus-bg);
+}
+
+.iamagnus-chat__panel[hidden] {
+	display: none;
+}
+
+.iamagnus-chat--floating .iamagnus-chat__panel {
+	position: absolute;
+	right: 0;
+	bottom: 72px;
+	width: 370px;
+	height: 540px;
+	max-height: calc(100vh - 110px);
+	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.iamagnus-chat--floating.iamagnus-chat--left .iamagnus-chat__panel {
+	right: auto;
+	left: 0;
+}
+
+.iamagnus-chat--inline .iamagnus-chat__panel {
+	height: 520px;
+	max-height: 80vh;
+}
+
+.iamagnus-chat__header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 12px 10px 12px 16px;
+	background: var(--iamagnus-accent);
+	color: #ffffff;
+}
+
+.iamagnus-chat__title {
+	flex: 1;
+	margin: 0;
+	padding: 0;
+	color: inherit;
+	font-size: 16px;
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.iamagnus-chat__icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+}
+
+.iamagnus-chat__icon:hover {
+	background: rgba(255, 255, 255, 0.18);
+}
+
+.iamagnus-chat__messages {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 8px;
+	overflow-y: auto;
+	padding: 14px;
+}
+
+.iamagnus-chat__msg {
+	max-width: 85%;
+	padding: 9px 12px;
+	border-radius: 14px;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.iamagnus-chat__msg--bot {
+	align-self: flex-start;
+	border-bottom-left-radius: 4px;
+	background: var(--iamagnus-bubble);
+}
+
+.iamagnus-chat__msg--user {
+	align-self: flex-end;
+	border-bottom-right-radius: 4px;
+	background: var(--iamagnus-accent);
+	color: #ffffff;
+}
+
+.iamagnus-chat__msg--error {
+	align-self: stretch;
+	max-width: none;
+	background: var(--iamagnus-error-bg);
+	color: var(--iamagnus-error-fg);
+	font-size: 14px;
+}
+
+.iamagnus-chat__msg a {
+	color: inherit;
+	text-decoration: underline;
+}
+
+.iamagnus-chat__typing {
+	color: var(--iamagnus-muted);
+	font-style: italic;
+}
+
+.iamagnus-chat__form {
+	display: flex;
+	align-items: flex-end;
+	gap: 8px;
+	padding: 10px;
+	border-top: 1px solid var(--iamagnus-border);
+}
+
+.iamagnus-chat__input {
+	flex: 1;
+	min-height: 40px;
+	max-height: 120px;
+	padding: 9px 12px;
+	border: 1px solid var(--iamagnus-border);
+	border-radius: 10px;
+	background: #ffffff;
+	color: var(--iamagnus-fg);
+	resize: none;
+}
+
+.iamagnus-chat__send {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 0;
+	border-radius: 10px;
+	background: var(--iamagnus-accent);
+	color: #ffffff;
+	cursor: pointer;
+}
+
+.iamagnus-chat__send:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* Read by screen readers, not shown. */
+.iamagnus-chat__sr {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* Shown only to administrators, where [magnus_chat] cannot work yet. */
+.iamagnus-chat-notice {
+	padding: 12px;
+	border: 1px dashed #d97706;
+	background: #fffbeb;
+}
+
+@media (max-width: 480px) {
+	.iamagnus-chat--floating {
+		right: 14px;
+		bottom: 14px;
+	}
+
+	.iamagnus-chat--floating.iamagnus-chat--left {
+		left: 14px;
+	}
+
+	.iamagnus-chat--floating .iamagnus-chat__panel {
+		position: fixed;
+		inset: 0;
+		width: auto;
+		height: auto;
+		max-height: none;
+		border-radius: 0;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.iamagnus-chat__launcher {
+		transition: transform 0.15s ease;
+	}
+
+	.iamagnus-chat__launcher:hover {
+		transform: scale(1.05);
+	}
+}
