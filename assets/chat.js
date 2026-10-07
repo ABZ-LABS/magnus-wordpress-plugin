@@ -23,8 +23,14 @@
 	var KEY_VISITOR = 'iamagnusChat:visitor';
 	var KEY_LOG = 'iamagnusChat:log';
 	var KEY_OPEN = 'iamagnusChat:open';
+	// While a person from the team has the conversation: the last reply seen.
+	var KEY_HANDOFF = 'iamagnusChat:handoff';
 	var MAX_LOG = 60;
 	var TIMEOUT_MS = 60000;
+	// How often to ask for the team's replies, and how long to back off when
+	// the site says to slow down.
+	var POLL_MS = 5000;
+	var POLL_BACKOFF_MS = 30000;
 
 	var SVG_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"';
 	var ICONS = {
@@ -168,10 +174,18 @@
 		// Bumped by "New conversation", so a reply that arrives later is dropped.
 		this.generation = 0;
 		this.pending = null;
+		this.following = false;
+		this.pollTimer = null;
+		var handoff = readJSON(this.session, KEY_HANDOFF, null);
+		this.after = handoff && typeof handoff.after === 'string' ? handoff.after : null;
 		this.build();
 		this.renderLog();
 		if (mode === 'floating') {
 			this.setOpen(readJSON(this.session, KEY_OPEN, false) === true, false);
+		}
+		// A reload in the middle of a handoff keeps listening for the team.
+		if (handoff && handoff.active === true) {
+			this.follow();
 		}
 	}
 
@@ -304,10 +318,16 @@
 		var node = el('div', 'iamagnus-chat__msg iamagnus-chat__msg--' + role);
 		if (role !== 'error') {
 			var who = el('span', 'iamagnus-chat__sr');
-			who.textContent = (role === 'user' ? this.i18n.you : this.i18n.assistant) + ': ';
+			who.textContent = (role === 'user' ? this.i18n.you : role === 'team' ? this.i18n.team : this.i18n.assistant) + ': ';
 			node.appendChild(who);
 		}
-		if (role === 'bot') {
+		if (role === 'team') {
+			// Seen, not read twice: the screen-reader label above already says it.
+			var label = el('span', 'iamagnus-chat__who', { 'aria-hidden': 'true' });
+			label.textContent = this.i18n.team || '';
+			node.appendChild(label);
+		}
+		if (role === 'bot' || role === 'team') {
 			var parts = splitLinks(text);
 			for (var i = 0; i < parts.length; i++) {
 				if (parts[i].href) {
@@ -345,7 +365,7 @@
 		}
 		for (var i = 0; i < this.log.length; i++) {
 			var item = this.log[i];
-			if (item && (item.role === 'user' || item.role === 'bot') && typeof item.text === 'string') {
+			if (item && (item.role === 'user' || item.role === 'bot' || item.role === 'team') && typeof item.text === 'string') {
 				this.bubble(item.role, item.text);
 			}
 		}
@@ -354,7 +374,7 @@
 	// Errors are shown but not kept: reloading the page should not replay them.
 	Chat.prototype.add = function (role, text, retry) {
 		this.bubble(role, text, retry);
-		if (role === 'user' || role === 'bot') {
+		if (role === 'user' || role === 'bot' || role === 'team') {
 			this.log.push({ role: role, text: text });
 			if (this.log.length > MAX_LOG) {
 				this.log = this.log.slice(-MAX_LOG);
@@ -388,6 +408,9 @@
 			this.pending.abort();
 			this.pending = null;
 		}
+		this.stopFollowing();
+		this.after = null;
+		this.saveHandoff();
 		this.setBusy(false);
 		this.visitor = uuid4();
 		this.saveVisitor();
@@ -458,6 +481,9 @@
 			}
 			if (result.ok && typeof data.reply === 'string' && data.reply) {
 				self.add('bot', data.reply);
+				if (data.handoff === true) {
+					self.follow();
+				}
 				return;
 			}
 			var retryable = result.status === 429 || (result.status >= 500 && data.code !== 'not_configured');
@@ -477,6 +503,88 @@
 				self.setBusy(false);
 			}
 		});
+	};
+
+	// A person from the team has the conversation: their replies are not the
+	// answer to any message, so the window asks for them until the agent is back.
+	Chat.prototype.follow = function () {
+		if (this.following || !this.config.updates) {
+			return;
+		}
+		this.following = true;
+		this.saveHandoff();
+		this.poll();
+	};
+
+	Chat.prototype.stopFollowing = function () {
+		this.following = false;
+		if (this.pollTimer) {
+			clearTimeout(this.pollTimer);
+			this.pollTimer = null;
+		}
+		this.saveHandoff();
+	};
+
+	Chat.prototype.saveHandoff = function () {
+		writeJSON(this.session, KEY_HANDOFF, { active: this.following, after: this.after });
+	};
+
+	Chat.prototype.poll = function () {
+		var self = this;
+		var generation = this.generation;
+		var base = this.config.updates;
+		var url = base + (base.indexOf('?') === -1 ? '?' : '&') + 'visitor=' + encodeURIComponent(this.visitor) +
+			(this.after ? '&after=' + encodeURIComponent(this.after) : '');
+		var again = function (ms) {
+			if (generation === self.generation && self.following) {
+				self.pollTimer = setTimeout(function () {
+					self.pollTimer = null;
+					self.poll();
+				}, ms);
+			}
+		};
+		win.fetch(url, {
+			method: 'GET',
+			headers: { Accept: 'application/json' },
+			credentials: 'omit'
+		}).then(function (response) {
+			return response.json().catch(function () {
+				return {};
+			}).then(function (data) {
+				return { ok: response.ok, status: response.status, data: data || {} };
+			});
+		}).then(function (result) {
+			if (generation !== self.generation || !self.following) {
+				return;
+			}
+			if (!result.ok) {
+				again(result.status === 429 ? POLL_BACKOFF_MS : self.pollMs());
+				return;
+			}
+			var messages = Array.isArray(result.data.messages) ? result.data.messages : [];
+			for (var i = 0; i < messages.length; i++) {
+				var m = messages[i];
+				if (m && typeof m.content === 'string' && m.content) {
+					self.add('team', m.content);
+				}
+				if (m && typeof m.id === 'string') {
+					self.after = m.id;
+				}
+			}
+			if (result.data.handoff === true) {
+				self.saveHandoff();
+				again(self.pollMs());
+			} else {
+				self.stopFollowing();
+			}
+		}).catch(function () {
+			again(self.pollMs());
+		});
+	};
+
+	Chat.prototype.pollMs = function () {
+		var ms = Number(this.config.pollMs);
+		return ms > 0 ? ms : POLL_MS;
 	};
 
 	// One chat per page: a chat inside the page wins over the corner button.

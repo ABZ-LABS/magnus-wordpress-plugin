@@ -56,6 +56,27 @@ final class Iamagnus_Chat_Rest {
 				),
 			)
 		);
+		register_rest_route(
+			self::NAMESPACE_V1,
+			'/updates',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( __CLASS__, 'updates' ),
+				// Public like the chat: it only reads the replies of the visitor
+				// whose id the browser holds.
+				'permission_callback' => '__return_true',
+				'args'                => array(
+					'visitor' => array(
+						'type'     => 'string',
+						'required' => true,
+					),
+					'after'   => array(
+						'type'     => 'string',
+						'required' => false,
+					),
+				),
+			)
+		);
 	}
 
 	/**
@@ -117,6 +138,7 @@ final class Iamagnus_Chat_Rest {
 				array(
 					'reply'   => $result['reply'],
 					'visitor' => $visitor,
+					'handoff' => ! empty( $result['handoff'] ),
 				),
 				200
 			);
@@ -125,6 +147,81 @@ final class Iamagnus_Chat_Rest {
 		self::record_failure( $result );
 		$status = 'rate_limited' === $result['kind'] ? 429 : 503;
 		return self::refuse( $status, $result['kind'], Iamagnus_Chat_Client::visitor_message( $result ), $result['retry_after'], $visitor );
+	}
+
+	/**
+	 * What a person from the team wrote to this visitor since `after`.
+	 *
+	 * The widget asks every few seconds while a person owns the conversation,
+	 * so it has a budget of its own: polling never spends the visitor's
+	 * messages, and the site-wide cap stays under Magnus's 7200 an hour.
+	 *
+	 * @param WP_REST_Request $request The request.
+	 * @return WP_REST_Response
+	 */
+	public static function updates( $request ) {
+		$settings = Iamagnus_Chat_Settings::get();
+		if ( '' === $settings['api_key'] ) {
+			return self::refuse( 503, 'not_configured', __( 'The chat is not available right now.', 'iamagnus-chat' ) );
+		}
+		$origin = (string) $request->get_header( 'origin' );
+		if ( '' !== $origin && ! self::origin_allowed( $origin ) ) {
+			return self::refuse( 403, 'origin', __( 'The chat is not available here.', 'iamagnus-chat' ) );
+		}
+		$visitor = (string) $request->get_param( 'visitor' );
+		if ( ! wp_is_uuid( $visitor, 4 ) ) {
+			return self::refuse( 400, 'visitor', __( 'The chat is not available right now.', 'iamagnus-chat' ) );
+		}
+		$after = (string) $request->get_param( 'after' );
+		if ( '' !== $after && ! wp_is_uuid( $after ) ) {
+			$after = '';
+		}
+
+		$wait = self::poll_limit( self::client_ip() );
+		if ( $wait > 0 ) {
+			return self::refuse( 429, 'rate_limited', Iamagnus_Chat_Client::visitor_message( array( 'kind' => 'rate_limited' ) ), $wait );
+		}
+
+		$client = new Iamagnus_Chat_Client( $settings['base_url'], $settings['api_key'] );
+		$result = $client->updates( self::user_for( $visitor ), $after );
+		if ( $result['ok'] ) {
+			return new WP_REST_Response(
+				array(
+					'handoff'  => $result['handoff'],
+					'messages' => $result['messages'],
+				),
+				200
+			);
+		}
+		self::record_failure( $result );
+		$status = 'rate_limited' === $result['kind'] ? 429 : 503;
+		return self::refuse( $status, $result['kind'], Iamagnus_Chat_Client::visitor_message( $result ), $result['retry_after'] );
+	}
+
+	/**
+	 * Polls allowed per visitor and for the whole site.
+	 *
+	 * @param string $ip The visitor's IP address.
+	 * @return int Seconds to wait, 0 when the poll may go through.
+	 */
+	public static function poll_limit( $ip ) {
+		/**
+		 * Polls allowed per visitor, as seconds => polls.
+		 *
+		 * @param array $limits Default: 30 per minute (one every 2 s).
+		 */
+		$per_visitor = apply_filters( 'iamagnus_chat_poll_limits', array( MINUTE_IN_SECONDS => 30 ) );
+		$wait        = self::spend( 'poll|ip|' . self::ip_bucket( $ip ), (array) $per_visitor );
+		if ( $wait > 0 ) {
+			return $wait;
+		}
+		/**
+		 * Polls allowed for the whole site, as seconds => polls.
+		 *
+		 * @param array $limits Default: 6000 per hour, below the key's 7200.
+		 */
+		$site = apply_filters( 'iamagnus_chat_poll_site_limits', array( HOUR_IN_SECONDS => 6000 ) );
+		return self::spend( 'poll|site', (array) $site );
 	}
 
 	/**
@@ -156,10 +253,11 @@ final class Iamagnus_Chat_Rest {
 	/**
 	 * Inputs Magnus treats as commands rather than as a message for the agent.
 	 *
-	 * A message starting with "/" can be an operator or debug command
-	 * (/bot, /auto, /behavior), "### Task:" skips the agent and spends the
-	 * key on a plain model call, and a lone "reset" ends a human takeover.
-	 * None of that is for an anonymous visitor. Expects a normalized message.
+	 * A message starting with "/" can be a debug command (/behavior), and
+	 * "### Task:" skips the agent and spends the key on a plain model call.
+	 * Neither is for an anonymous visitor. ("reset", "/bot" and "/auto" no
+	 * longer end a human takeover in Magnus; only the team does.) Expects a
+	 * normalized message.
 	 *
 	 * @param string $message The visitor's message, after normalize_message().
 	 * @return bool
@@ -172,10 +270,7 @@ final class Iamagnus_Chat_Rest {
 		if ( '/' === $m[0] ) {
 			return true;
 		}
-		if ( 0 === stripos( $m, '### task:' ) ) {
-			return true;
-		}
-		return 'reset' === strtolower( $m );
+		return 0 === stripos( $m, '### task:' );
 	}
 
 	/**

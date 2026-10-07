@@ -76,7 +76,7 @@ const CONFIG = {
 // A page with the given mounts, the configuration and the script, and a fetch
 // that answers with `reply(request)`. The script runs once the document is
 // parsed, as a deferred script does in a browser.
-async function page(mounts, reply, config = CONFIG) {
+async function page(mounts, reply, config = CONFIG, before = null) {
 	const dom = new JSDOM(`<!doctype html><body>${mounts}</body>`, {
 		url: 'https://site.test/',
 		runScripts: 'outside-only',
@@ -85,9 +85,10 @@ async function page(mounts, reply, config = CONFIG) {
 	const { window } = dom;
 	const requests = [];
 	window.fetch = (url, init) => {
-		const body = JSON.parse(init.body);
+		// A poll for the team's replies is a GET: no body.
+		const body = init && init.body ? JSON.parse(init.body) : null;
 		requests.push({ url, init, body });
-		const answer = reply(body, requests.length);
+		const answer = reply(body, requests.length, url);
 		if (answer instanceof Error) {
 			return Promise.reject(answer);
 		}
@@ -101,6 +102,9 @@ async function page(mounts, reply, config = CONFIG) {
 		await new Promise((resolve) => window.document.addEventListener('DOMContentLoaded', resolve));
 	}
 	window.iamagnusChat = config;
+	if (before) {
+		before(window);
+	}
 	window.eval(SOURCE);
 	return { window, document: window.document, requests };
 }
@@ -121,7 +125,7 @@ async function type(doc, text) {
 function bubbles(doc) {
 	return [...doc.querySelectorAll('.iamagnus-chat__msg')].map((node) => {
 		const copy = node.cloneNode(true);
-		copy.querySelectorAll('.iamagnus-chat__sr, .iamagnus-chat__retry').forEach((n) => n.remove());
+		copy.querySelectorAll('.iamagnus-chat__sr, .iamagnus-chat__retry, .iamagnus-chat__who').forEach((n) => n.remove());
 		return {
 			role: node.className.replace(/.*iamagnus-chat__msg--(\w+).*/, '$1'),
 			text: copy.textContent.replace(/\s+$/, '')
@@ -348,4 +352,96 @@ test('while waiting, the send button stays focusable', async () => {
 		await settle();
 	}
 	assert.equal(send.getAttribute('aria-disabled'), 'false');
+});
+
+
+// --- a person from the team ------------------------------------------------------
+
+const TEAM_CONFIG = {
+	...CONFIG,
+	updates: 'https://site.test/wp-json/iamagnus-chat/v1/updates',
+	pollMs: 5,
+	i18n: { ...CONFIG.i18n, team: 'A person from the team' }
+};
+
+const isPoll = (url) => String(url).startsWith(TEAM_CONFIG.updates);
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// A site where the agent hands off on the first message, and the polls answer
+// from `polls` in order; past the end, the team has handed the conversation back.
+function handingOff(polls) {
+	let n = 0;
+	return (body, count, url) => {
+		if (isPoll(url)) {
+			const next = polls[n++];
+			return next || { status: 200, json: { handoff: false, messages: [] } };
+		}
+		return { status: 200, json: { reply: 'Te paso con una persona del equipo.', visitor: chat.uuid4(), handoff: true } };
+	};
+}
+
+test('after a handoff the window shows what the team writes, until the agent is back', async () => {
+	const reply = handingOff([
+		{ status: 200, json: { handoff: true, messages: [{ id: 'a1b2c3d4-0000-4000-8000-000000000001', content: 'Hola, soy del equipo.' }] } },
+		{ status: 200, json: { handoff: true, messages: [] } },
+		{ status: 200, json: { handoff: true, messages: [{ id: 'a1b2c3d4-0000-4000-8000-000000000002', content: 'Ya quedó reservado.' }] } }
+	]);
+	const { document, requests } = await page('<div class="iamagnus-chat-mount" data-mode="inline"></div>', reply, TEAM_CONFIG);
+
+	await type(document, 'Quiero hablar con alguien');
+	await wait(80);
+
+	assert.deepEqual(bubbles(document).slice(1), [
+		{ role: 'user', text: 'Quiero hablar con alguien' },
+		{ role: 'bot', text: 'Te paso con una persona del equipo.' },
+		{ role: 'team', text: 'Hola, soy del equipo.' },
+		{ role: 'team', text: 'Ya quedó reservado.' }
+	]);
+	const polls = requests.filter((r) => isPoll(r.url));
+	assert.equal(polls.length, 4, 'stops once the team hands the conversation back');
+	assert.equal(polls[0].init.method, 'GET');
+	assert.equal(polls[0].body, null);
+	assert.match(polls[1].url, /after=a1b2c3d4-0000-4000-8000-000000000001/);
+	assert.match(polls[0].url, /visitor=[0-9a-f-]{36}/);
+	assert.equal(document.querySelector('.iamagnus-chat__msg--team .iamagnus-chat__who').getAttribute('aria-hidden'), 'true');
+});
+
+test('no handoff, no polling', async () => {
+	const { document, requests } = await page(
+		'<div class="iamagnus-chat-mount" data-mode="inline"></div>',
+		() => ({ status: 200, json: { reply: 'Hola', visitor: chat.uuid4(), handoff: false } }),
+		TEAM_CONFIG
+	);
+	await type(document, 'Hola');
+	await wait(30);
+
+	assert.equal(requests.filter((r) => isPoll(r.url)).length, 0);
+});
+
+test('a reload in the middle of a handoff keeps listening, from the last reply seen', async () => {
+	const seen = 'a1b2c3d4-0000-4000-8000-000000000009';
+	const { requests } = await page(
+		'<div class="iamagnus-chat-mount" data-mode="inline"></div>',
+		() => ({ status: 200, json: { handoff: false, messages: [] } }),
+		TEAM_CONFIG,
+		(window) => window.sessionStorage.setItem('iamagnusChat:handoff', JSON.stringify({ active: true, after: seen }))
+	);
+	await wait(20);
+
+	assert.equal(requests.length, 1);
+	assert.match(requests[0].url, new RegExp(`after=${seen}`));
+});
+
+test('a new conversation stops listening for the team', async () => {
+	const reply = handingOff(Array.from({ length: 1000 }, () => ({ status: 200, json: { handoff: true, messages: [] } })));
+	const { document, requests } = await page('<div class="iamagnus-chat-mount" data-mode="inline"></div>', reply, TEAM_CONFIG);
+
+	await type(document, 'Quiero hablar con alguien');
+	await wait(20);
+	document.querySelector('.iamagnus-chat__header button[aria-label="New conversation"]').click();
+	const after = requests.length;
+	await wait(40);
+
+	assert.ok(after > 1, 'it was polling');
+	assert.ok(requests.length <= after + 1, 'at most the poll already in flight');
 });

@@ -280,3 +280,6 @@ msgstr "Este sitio ve tu pedido como si viniera de %s, una dirección privada: p
 
 msgid "Retry"
 msgstr "Reintentar"
+
+msgid "A person from the team"
+msgstr "Una persona del equipo"

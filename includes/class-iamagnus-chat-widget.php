@@ -53,6 +53,8 @@ final class Iamagnus_Chat_Widget {
 	public static function config( $s ) {
 		return array(
 			'endpoint'    => esc_url_raw( rest_url( Iamagnus_Chat_Rest::NAMESPACE_V1 . '/message' ) ),
+			// Asked every few seconds while a person from the team has the conversation.
+			'updates'     => esc_url_raw( rest_url( Iamagnus_Chat_Rest::NAMESPACE_V1 . '/updates' ) ),
 			'title'       => $s['title'],
 			'welcome'     => $s['welcome'],
 			'placeholder' => $s['placeholder'],
@@ -72,6 +74,7 @@ final class Iamagnus_Chat_Widget {
 				'tooLong'         => __( 'Messages can be up to %d characters long.', 'iamagnus-chat' ),
 				'you'             => __( 'You', 'iamagnus-chat' ),
 				'assistant'       => __( 'Assistant', 'iamagnus-chat' ),
+				'team'            => __( 'A person from the team', 'iamagnus-chat' ),
 			),
 		);
 	}

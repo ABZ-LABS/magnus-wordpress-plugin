@@ -21,70 +21,70 @@ msgstr ""
 msgid "Magnus"
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:230
+#: includes/class-iamagnus-chat-client.php:295
 msgid "There are many questions right now. Please try again in a minute."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:232 includes/class-iamagnus-chat-widget.php:68
+#: includes/class-iamagnus-chat-client.php:297 includes/class-iamagnus-chat-widget.php:70
 msgid "I can’t answer right now. Please try again in a few minutes."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:248
+#: includes/class-iamagnus-chat-client.php:313
 msgid "Magnus could not be reached. Check the address and that this server can make outgoing HTTPS requests."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:250
+#: includes/class-iamagnus-chat-client.php:315
 msgid "The address answered, but not the way Magnus does. Check the address."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:253
+#: includes/class-iamagnus-chat-client.php:318
 msgid "Magnus accepted the key, but its organization is deactivated."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:256
+#: includes/class-iamagnus-chat-client.php:321
 msgid "The key does not belong to any organization. Create a System API key in the Magnus dashboard."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:258
+#: includes/class-iamagnus-chat-client.php:323
 msgid "Magnus rejected the API key. Create a new one in the Magnus dashboard and paste it here."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:260
+#: includes/class-iamagnus-chat-client.php:325
 msgid "Magnus is limiting this key: too many messages in the last hour. Ask Magnus for a higher limit if your site needs it."
 msgstr ""
 
 #. translators:%d: HTTP status code
-#: includes/class-iamagnus-chat-client.php:263
+#: includes/class-iamagnus-chat-client.php:328
 msgid "Magnus failed (HTTP %d). It usually passes; if it does not, contact Magnus."
 msgstr ""
 
-#: includes/class-iamagnus-chat-client.php:265
+#: includes/class-iamagnus-chat-client.php:330
 msgid "Magnus answered with an empty message."
 msgstr ""
 
 #. translators:1: HTTP status code, 2: Magnus error code
-#: includes/class-iamagnus-chat-client.php:269
+#: includes/class-iamagnus-chat-client.php:334
 msgid "Magnus refused the request (HTTP %1$d %2$s)."
 msgstr ""
 
-#: includes/class-iamagnus-chat-rest.php:70
+#: includes/class-iamagnus-chat-rest.php:91 includes/class-iamagnus-chat-rest.php:165 includes/class-iamagnus-chat-rest.php:173
 msgid "The chat is not available right now."
 msgstr ""
 
-#: includes/class-iamagnus-chat-rest.php:77
+#: includes/class-iamagnus-chat-rest.php:98 includes/class-iamagnus-chat-rest.php:169
 msgid "The chat is not available here."
 msgstr ""
 
-#: includes/class-iamagnus-chat-rest.php:82
+#: includes/class-iamagnus-chat-rest.php:103
 msgid "Write a message first."
 msgstr ""
 
 #. translators:%d: maximum number of characters
-#: includes/class-iamagnus-chat-rest.php:90 includes/class-iamagnus-chat-widget.php:72
+#: includes/class-iamagnus-chat-rest.php:111 includes/class-iamagnus-chat-widget.php:74
 msgid "Messages can be up to %d characters long."
 msgstr ""
 
-#: includes/class-iamagnus-chat-rest.php:94
+#: includes/class-iamagnus-chat-rest.php:115
 msgid "That message can’t be sent as it is. Please write it inside a sentence."
 msgstr ""
 
@@ -245,42 +245,46 @@ msgstr ""
 msgid "The last time a visitor wrote (%1$s), the chat could not answer: %2$s"
 msgstr ""
 
-#: includes/class-iamagnus-chat-widget.php:63
+#: includes/class-iamagnus-chat-widget.php:65
 msgid "Open the chat"
 msgstr ""
 
-#: includes/class-iamagnus-chat-widget.php:64
+#: includes/class-iamagnus-chat-widget.php:66
 msgid "Close the chat"
 msgstr ""
 
-#: includes/class-iamagnus-chat-widget.php:65
+#: includes/class-iamagnus-chat-widget.php:67
 msgid "Send"
 msgstr ""
 
-#: includes/class-iamagnus-chat-widget.php:66
+#: includes/class-iamagnus-chat-widget.php:68
 msgid "New conversation"
 msgstr ""
 
-#: includes/class-iamagnus-chat-widget.php:67
+#: includes/class-iamagnus-chat-widget.php:69
 msgid "Writing…"
 msgstr ""
 
-#: includes/class-iamagnus-chat-widget.php:69
+#: includes/class-iamagnus-chat-widget.php:71
 msgid "No connection. Check your internet and try again."
 msgstr ""
 
-#: includes/class-iamagnus-chat-widget.php:70
+#: includes/class-iamagnus-chat-widget.php:72
 msgid "Retry"
 msgstr ""
 
-#: includes/class-iamagnus-chat-widget.php:73
+#: includes/class-iamagnus-chat-widget.php:75
 msgid "You"
 msgstr ""
 
-#: includes/class-iamagnus-chat-widget.php:74
+#: includes/class-iamagnus-chat-widget.php:76
 msgid "Assistant"
 msgstr ""
 
-#: includes/class-iamagnus-chat-widget.php:106
+#: includes/class-iamagnus-chat-widget.php:77
+msgid "A person from the team"
+msgstr ""
+
+#: includes/class-iamagnus-chat-widget.php:109
 msgid "Magnus Chat: paste the API key in Settings → Magnus Chat to show the chat here. Visitors see nothing until then."
 msgstr ""

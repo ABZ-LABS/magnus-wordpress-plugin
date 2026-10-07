@@ -20,10 +20,19 @@ visitor's browser ──POST /wp-json/iamagnus-chat/v1/message──▶ WordPres
 - **Limits before Magnus.** Up to 2,000 characters; 8 messages per minute and 60
   per hour per visitor (an IPv6 visitor is its /64), and 100 per hour for the
   whole site, below the key's own 120. Only pages of the site itself may call the
-  route. Magnus's reserved inputs (`/bot`, `/behavior`, `### Task:`, a lone
-  `reset`) are refused even behind Unicode spaces. Every turn carries an
+  route. Anything starting with `/` (Magnus's debug commands) and `### Task:`
+  are refused even behind Unicode spaces. Every turn carries an
   `Idempotency-Key`, and "Retry" resends the same turn, so Magnus replays it
   instead of running it twice.
+- **A person from your team can answer.** When the agent hands a conversation
+  over, or your team takes it from the Magnus dashboard, the window asks the
+  site every 5 seconds for what that person writes (`GET
+  /wp-json/iamagnus-chat/v1/updates`, which asks Magnus's
+  `/v1/conversations/updates` with the same key and pseudonymous user) and
+  shows it marked "A person from the team". It stops when the team hands the
+  conversation back, and resumes after a reload. Polls have their own limits
+  (30 a minute per visitor, 6,000 an hour for the site) and never spend the
+  visitor's messages.
 - **The key goes only where it was saved for.** No redirects are followed (they
   would carry the key along), internal addresses are refused, and changing the
   Magnus address deletes the saved key unless a new one comes with it.

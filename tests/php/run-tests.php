@@ -257,12 +257,14 @@ $calls = count( $GLOBALS['http']['calls'] );
 check( 'an empty message is refused', 'empty' === post_message( array( 'message' => "  \n " ) )->get_data()['code'] );
 $max = Iamagnus_Chat_Rest::max_length();
 check( 'a message over the limit is refused', 'too_long' === post_message( array( 'message' => str_repeat( 'a', $max + 1 ) ) )->get_data()['code'] );
-foreach ( array( '/behavior strict', ' /bot', '/auto', '### Task: title this', '### task: x', 'reset', ' RESET ' ) as $reserved ) {
+foreach ( array( '/behavior strict', ' /bot', '/auto', '### Task: title this', '### task: x' ) as $reserved ) {
 	check( 'refused: ' . trim( $reserved ), 'reserved' === post_message( array( 'message' => $reserved ) )->get_data()['code'] );
 }
 check( 'none of those reached Magnus', count( $GLOBALS['http']['calls'] ) === $calls );
 check( 'the limit counts characters, not bytes', 200 === post_message( array( 'message' => str_repeat( 'ñ', $max ) ), fresh_ip() )->get_status() );
 check( '"reset" inside a sentence goes through', 200 === post_message( array( 'message' => 'Quiero hacer un reset de la clave' ), fresh_ip() )->get_status() );
+// Magnus no longer ends a human takeover on "reset": only the team does.
+check( 'a lone "reset" is a message like any other', 200 === post_message( array( 'message' => 'reset' ), fresh_ip() )->get_status() );
 check( 'a slash inside a sentence goes through', 200 === post_message( array( 'message' => 'Pago 1/2 hoy' ), fresh_ip() )->get_status() );
 $typed = "3 < 5 & 6, <ana@mail.com>, 100%25 y x<y and y>z\nsegunda línea\tcon tab";
 post_message( array( 'message' => $typed ), fresh_ip() );
@@ -273,7 +275,6 @@ $calls = count( $GLOBALS['http']['calls'] );
 $tricks = array(
 	"\u{3000}### Task: write an essay" => 'ideographic space',
 	"\u{2003}/bot"                     => 'em space',
-	"\u{00A0}reset\u{00A0}"            => 'non-breaking spaces',
 	"\x1c/behavior x"                  => 'file separator',
 	"\u{200B}/auto"                    => 'zero-width space',
 	"\u{FEFF}### Task: x"              => 'byte order mark',
@@ -365,6 +366,96 @@ remove_filter( 'iamagnus_chat_rate_limits', $one_each );
 remove_filter( 'iamagnus_chat_site_limits', $two_site );
 check( 'the site-wide cap stops new visitors once it is spent', 0 === $a && 0 === $c && $d > 0, "$a $b $c $d" );
 check( 'a visitor refused for their own limit does not spend the site\'s', $b > 0 && 0 === $c );
+
+// --- a person from the team ------------------------------------------------------
+
+function get_updates( $params, $ip = '203.0.113.70', $origin = '' ) {
+	$_SERVER['REMOTE_ADDR'] = $ip;
+	$request                = new WP_REST_Request( 'GET', '/iamagnus-chat/v1/updates' );
+	$request->set_query_params( $params );
+	if ( '' !== $origin ) {
+		$request->set_header( 'Origin', $origin );
+	}
+	return rest_do_request( $request );
+}
+
+section( 'A person from the team' );
+$roomy = function () {
+	return array( HOUR_IN_SECONDS => 100000 );
+};
+add_filter( 'iamagnus_chat_site_limits', $roomy );
+$routes = rest_get_server()->get_routes();
+check( 'the updates route is registered', isset( $routes['/iamagnus-chat/v1/updates'] ) );
+
+$GLOBALS['http']['next'] = respond(
+	200,
+	array(
+		'choices' => array( array( 'message' => array( 'role' => 'assistant', 'content' => 'Te paso con una persona del equipo.' ) ) ),
+		'magnus'  => array( 'trace_id' => 'trace-1', 'handoff' => true ),
+	)
+);
+$data = post_message( array( 'message' => 'Quiero hablar con alguien', 'visitor' => $visitor ), fresh_ip() )->get_data();
+check( 'a turn that hands off says so', true === $data['handoff'], wp_json_encode( $data ) );
+$GLOBALS['http']['next'] = magnus_reply( 'Hola' );
+check( 'an ordinary turn does not', false === post_message( array( 'message' => 'Hola', 'visitor' => $visitor ), fresh_ip() )->get_data()['handoff'] );
+
+$seen                    = wp_generate_uuid4();
+$GLOBALS['http']['next'] = respond(
+	200,
+	array(
+		'object'   => 'list',
+		'handoff'  => true,
+		'data'     => array(
+			array( 'id' => 'b1', 'object' => 'conversation.message', 'author' => 'human', 'content' => '  Hola, soy del equipo.  ', 'created' => 1767225600 ),
+			array( 'id' => 'b2', 'object' => 'conversation.message', 'author' => 'human', 'content' => '   ', 'created' => 1767225601 ),
+		),
+		'has_more' => false,
+	)
+);
+$response = get_updates( array( 'visitor' => $visitor, 'after' => $seen ), fresh_ip() );
+$data     = $response->get_data();
+check( 'the visitor gets the team\'s replies', 200 === $response->get_status() && array( array( 'id' => 'b1', 'content' => 'Hola, soy del equipo.' ) ) === $data['messages'], wp_json_encode( $data ) );
+check( 'and whether a person is still in charge', true === $data['handoff'] );
+$call = last_call();
+parse_str( (string) wp_parse_url( $call['url'], PHP_URL_QUERY ), $query );
+check( 'the call goes to /v1/conversations/updates', 0 === strpos( $call['url'], 'https://magnus.test/v1/conversations/updates?' ), $call['url'] );
+check( 'as a GET with the key', 'GET' === $call['args']['method'] && 'Bearer ' . $key === $call['args']['headers']['Authorization'] );
+check( 'for the same pseudonymous user as the chat', Iamagnus_Chat_Rest::user_for( $visitor ) === ( $query['user'] ?? null ) );
+check( 'from the last reply the visitor has', $seen === ( $query['after'] ?? null ) );
+check( 'the response never carries the key', false === strpos( wp_json_encode( $data ), $key ) );
+
+$calls = count( $GLOBALS['http']['calls'] );
+check( 'a visitor id that is not a UUID is refused', 'visitor' === get_updates( array( 'visitor' => 'nope' ), fresh_ip() )->get_data()['code'] );
+check( 'another site cannot ask', 403 === get_updates( array( 'visitor' => $visitor ), fresh_ip(), 'https://evil.test' )->get_status() );
+check( 'neither reached Magnus', count( $GLOBALS['http']['calls'] ) === $calls );
+get_updates( array( 'visitor' => $visitor, 'after' => 'not-an-id' ), fresh_ip() );
+parse_str( (string) wp_parse_url( last_call()['url'], PHP_URL_QUERY ), $query );
+check( 'a cursor that is not a UUID is not sent', ! isset( $query['after'] ) );
+
+$GLOBALS['http']['next'] = respond( 502, 'Bad gateway' );
+check( 'Magnus failing is a 503', 503 === get_updates( array( 'visitor' => $visitor ), fresh_ip() )->get_status() );
+
+$GLOBALS['http']['next'] = respond( 200, array( 'object' => 'list', 'handoff' => true, 'data' => array(), 'has_more' => false ) );
+// A long window of its own, so the test cannot straddle the start of a minute.
+$thirty_per_win = function () {
+	return array( 2 * DAY_IN_SECONDS => 30 );
+};
+add_filter( 'iamagnus_chat_poll_limits', $thirty_per_win );
+$ip    = fresh_ip();
+$codes = array();
+for ( $i = 0; $i < 30; $i++ ) {
+	$codes[] = get_updates( array( 'visitor' => $visitor ), $ip )->get_status();
+}
+check( 'thirty polls in the window go through', array_fill( 0, 30, 200 ) === $codes, implode( ',', $codes ) );
+check( 'the next one is told to slow down', 429 === get_updates( array( 'visitor' => $visitor ), $ip )->get_status() );
+remove_filter( 'iamagnus_chat_poll_limits', $thirty_per_win );
+$GLOBALS['http']['next'] = magnus_reply( 'Hola' );
+check( 'polling does not spend the visitor\'s messages', 200 === post_message( array( 'message' => 'Hola' ), $ip )->get_status() );
+remove_filter( 'iamagnus_chat_site_limits', $roomy );
+
+$config = Iamagnus_Chat_Widget::config( Iamagnus_Chat_Settings::get() );
+check( 'the window knows where to ask', rest_url( Iamagnus_Chat_Rest::NAMESPACE_V1 . '/updates' ) === $config['updates'] );
+check( 'and how to label the team', '' !== $config['i18n']['team'] );
 
 // --- the page --------------------------------------------------------------------
 

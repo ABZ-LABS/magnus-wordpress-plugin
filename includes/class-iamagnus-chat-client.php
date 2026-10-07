@@ -8,7 +8,7 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * A small client for the three Magnus endpoints the plugin uses.
+ * A small client for the four Magnus endpoints the plugin uses.
  *
  * It uses wp_remote_*() rather than a PHP SDK on purpose: plugins that bundle
  * HTTP libraries collide with each other, and the WordPress API already
@@ -167,6 +167,71 @@ final class Iamagnus_Chat_Client {
 			'ok'       => true,
 			'reply'    => $text,
 			'trace_id' => $trace,
+			// A person from the team owns the conversation: the reply is the
+			// agent handing off, or a notice, and what the person writes
+			// arrives through updates().
+			'handoff'  => is_array( $body ) && isset( $body['magnus']['handoff'] ) && true === $body['magnus']['handoff'],
+		);
+	}
+
+	/**
+	 * The replies a person from the team wrote to this visitor in the Magnus
+	 * dashboard, and whether a person owns the conversation now. A chat turn
+	 * cannot carry them: they are written while the visitor is not asking.
+	 *
+	 * @param string $user  The pseudonymous visitor id, as in chat().
+	 * @param string $after The id of the last reply the visitor already has, or ''.
+	 * @return array {ok: true, handoff: bool, messages: array} or a failure.
+	 */
+	public function updates( $user, $after = '' ) {
+		$query = array(
+			'model' => 'magnus',
+			'user'  => (string) $user,
+		);
+		if ( '' !== $after ) {
+			$query['after'] = (string) $after;
+		}
+		$url      = $this->base . '/v1/conversations/updates?' . http_build_query( $query, '', '&', PHP_QUERY_RFC3986 );
+		$response = wp_remote_get( $url, $this->args( 15, $this->headers() ) );
+		return self::parse_updates( $response );
+	}
+
+	/**
+	 * Reads an updates response. Public so the tests can feed it canned responses.
+	 *
+	 * @param array|WP_Error $response What wp_remote_get() returned.
+	 * @return array
+	 */
+	public static function parse_updates( $response ) {
+		if ( is_wp_error( $response ) ) {
+			return self::failure( 'unreachable', 0, null, null, $response->get_error_message() );
+		}
+		$status = (int) wp_remote_retrieve_response_code( $response );
+		$body   = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+		if ( 200 !== $status ) {
+			return self::error_from_status( $status, $body, $response );
+		}
+		if ( ! is_array( $body ) || ! isset( $body['data'] ) || ! is_array( $body['data'] ) ) {
+			return self::failure( 'unexpected', $status, null );
+		}
+		$messages = array();
+		foreach ( $body['data'] as $item ) {
+			if ( ! is_array( $item ) || ! isset( $item['id'], $item['content'] ) || ! is_string( $item['id'] ) || ! is_string( $item['content'] ) ) {
+				continue;
+			}
+			$content = trim( $item['content'] );
+			if ( '' !== $content ) {
+				// Only what the widget shows: the operator is never named anyway.
+				$messages[] = array(
+					'id'      => $item['id'],
+					'content' => $content,
+				);
+			}
+		}
+		return array(
+			'ok'       => true,
+			'handoff'  => isset( $body['handoff'] ) && true === $body['handoff'],
+			'messages' => $messages,
 		);
 	}
 

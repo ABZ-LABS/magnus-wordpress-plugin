@@ -172,6 +172,23 @@
 	background: var(--iamagnus-bubble);
 }
 
+/* A person from the team writing in the agent's place: same side as the agent,
+   marked so the visitor knows a human is answering. */
+.iamagnus-chat__msg--team {
+	align-self: flex-start;
+	border-bottom-left-radius: 4px;
+	background: var(--iamagnus-bubble);
+	box-shadow: inset 3px 0 0 var(--iamagnus-accent);
+}
+
+.iamagnus-chat__who {
+	display: block;
+	margin-bottom: 2px;
+	font-size: 0.75em;
+	font-weight: 600;
+	opacity: 0.75;
+}
+
 .iamagnus-chat__msg--user {
 	align-self: flex-end;
 	border-bottom-right-radius: 4px;

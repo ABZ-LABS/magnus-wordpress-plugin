@@ -21,10 +21,19 @@ navegador del visitante ──POST /wp-json/iamagnus-chat/v1/message──▶ Wo
 - **Límites antes de llegar a Magnus.** Hasta 2.000 caracteres; 8 mensajes por
   minuto y 60 por hora por visitante (un visitante IPv6 es su /64), y 100 por hora
   para todo el sitio, por debajo de los 120 de la key. Sólo las páginas del propio
-  sitio pueden llamar a la ruta. Se rechazan las entradas reservadas de Magnus
-  (`/bot`, `/behavior`, `### Task:`, un `reset` solo) aunque vengan detrás de
+  sitio pueden llamar a la ruta. Se rechaza lo que empieza con `/` (los
+  comandos de depuración de Magnus) y `### Task:`, aunque vengan detrás de
   espacios Unicode. Cada turno lleva un `Idempotency-Key`, y «Reintentar» reenvía
   el mismo turno, así Magnus lo repite en vez de correrlo dos veces.
+- **Una persona de tu equipo puede responder.** Cuando el agente deriva la
+  conversación, o tu equipo la toma desde el panel de Magnus, la ventana le
+  pregunta al sitio cada 5 segundos qué escribió esa persona (`GET
+  /wp-json/iamagnus-chat/v1/updates`, que consulta `/v1/conversations/updates`
+  de Magnus con la misma key y el mismo usuario seudónimo) y lo muestra marcado
+  «Una persona del equipo». Deja de preguntar cuando el equipo devuelve la
+  conversación, y retoma después de recargar la página. Las consultas tienen sus
+  propios límites (30 por minuto por visitante, 6.000 por hora para el sitio) y
+  nunca gastan los mensajes del visitante.
 - **La key va sólo adonde se guardó.** No se siguen redirecciones (se llevarían
   la key), se rechazan direcciones internas, y cambiar la dirección de Magnus
   borra la key guardada salvo que venga una nueva con el cambio.

@@ -27,6 +27,8 @@ A Magnus account and a System API key created in the Magnus dashboard for the ag
 
 This plugin sends what visitors write in the chat to Magnus, the service that runs the agent, at the address set in Settings → Magnus Chat (by default `https://app.iamagnus.com`). Each message goes with a pseudonymous code derived from a random value in the visitor's browser; the visitor's name, email address and IP address are not sent. Magnus keeps the conversation to continue it.
 
+While a person from your team has taken a conversation over in the Magnus dashboard, the chat asks your site every few seconds for that person's replies, and your site asks Magnus with the same pseudonymous code.
+
 * Service: [iamagnus.com](https://iamagnus.com)
 * Terms of use: [core.iamagnus.com/terminos](https://core.iamagnus.com/terminos)
 * Privacy policy: [core.iamagnus.com/privacidad](https://core.iamagnus.com/privacidad)
